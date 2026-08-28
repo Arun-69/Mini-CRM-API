@@ -82,6 +82,35 @@ class CompanyController {
       });
     }
   }
+
+  // Delete company
+  async deleteCompany(req, res) {
+    try {
+      await CompanyService.deleteCompany(req.params.id, req.user._id);
+      res.json({
+        status: 'success',
+        message: 'Company deleted successfully'
+      });
+    } catch (error) {
+      console.error('Delete company error:', error);
+      if (error.message === 'Company not found') {
+        return res.status(404).json({
+          status: 'error',
+          message: error.message
+        });
+      }
+      if (error.message === 'Cannot delete company with associated leads') {
+        return res.status(400).json({
+          status: 'error',
+          message: error.message
+        });
+      }
+      res.status(500).json({
+        status: 'error',
+        message: error.message
+      });
+    }
+  }
 }
 
 module.exports = new CompanyController();

@@ -1,4 +1,5 @@
 const LeadService = require('../services/leadService');
+const mongoose = require('mongoose');
 
 class LeadController {
   // Create lead
@@ -14,7 +15,7 @@ class LeadController {
       console.error('Create lead error:', error);
       res.status(500).json({
         status: 'error',
-        message: error.message
+        message: error.message || 'Failed to create lead'
       });
     }
   }
@@ -31,7 +32,7 @@ class LeadController {
       console.error('Get leads error:', error);
       res.status(500).json({
         status: 'error',
-        message: error.message
+        message: error.message || 'Failed to fetch leads'
       });
     }
   }
@@ -46,7 +47,7 @@ class LeadController {
       });
     } catch (error) {
       console.error('Get lead error:', error);
-      if (error.message === 'Lead not found') {
+      if (error.message === 'Lead not found' || error.message === 'Invalid lead ID format') {
         return res.status(404).json({
           status: 'error',
           message: error.message
@@ -54,7 +55,7 @@ class LeadController {
       }
       res.status(500).json({
         status: 'error',
-        message: error.message
+        message: error.message || 'Failed to fetch lead'
       });
     }
   }
@@ -70,7 +71,7 @@ class LeadController {
       });
     } catch (error) {
       console.error('Update lead error:', error);
-      if (error.message === 'Lead not found') {
+      if (error.message === 'Lead not found' || error.message === 'Invalid lead ID format') {
         return res.status(404).json({
           status: 'error',
           message: error.message
@@ -78,7 +79,7 @@ class LeadController {
       }
       res.status(500).json({
         status: 'error',
-        message: error.message
+        message: error.message || 'Failed to update lead'
       });
     }
   }
@@ -102,7 +103,7 @@ class LeadController {
       });
     } catch (error) {
       console.error('Update lead status error:', error);
-      if (error.message === 'Lead not found') {
+      if (error.message === 'Lead not found' || error.message === 'Invalid lead ID format') {
         return res.status(404).json({
           status: 'error',
           message: error.message
@@ -110,7 +111,7 @@ class LeadController {
       }
       res.status(500).json({
         status: 'error',
-        message: error.message
+        message: error.message || 'Failed to update lead status'
       });
     }
   }
@@ -118,22 +119,35 @@ class LeadController {
   // Delete lead
   async deleteLead(req, res) {
     try {
+      console.log('Delete request received for lead:', req.params.id);
+      console.log('User:', req.user._id);
+
       await LeadService.deleteLead(req.params.id, req.user._id);
+      
       res.json({
         status: 'success',
         message: 'Lead deleted successfully'
       });
     } catch (error) {
       console.error('Delete lead error:', error);
-      if (error.message === 'Lead not found') {
+      
+      if (error.message === 'Lead not found' || error.message === 'Invalid lead ID format') {
         return res.status(404).json({
           status: 'error',
           message: error.message
         });
       }
+      
+      if (error.message === 'Lead is already deleted') {
+        return res.status(400).json({
+          status: 'error',
+          message: error.message
+        });
+      }
+      
       res.status(500).json({
         status: 'error',
-        message: error.message
+        message: error.message || 'Failed to delete lead'
       });
     }
   }

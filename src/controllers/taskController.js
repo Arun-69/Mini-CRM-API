@@ -59,7 +59,7 @@ class TaskController {
     }
   }
 
-  // Update task status
+  // Update task status - Only assigned users can update
   async updateTaskStatus(req, res) {
     try {
       const { status } = req.body;

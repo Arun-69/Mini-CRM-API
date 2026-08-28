@@ -4,12 +4,14 @@ const LeadService = require('./leadService');
 class TaskService {
   // Create task
   async createTask(taskData, userId) {
-    // Check if lead exists and user has access
     const lead = await LeadService.getLead(taskData.lead, userId);
 
     const data = {
-      ...taskData,
-      assignedBy: userId
+      title: taskData.title,
+      lead: taskData.lead,
+      assignedTo: taskData.assignedTo,
+      assignedBy: userId,
+      dueDate: taskData.dueDate || null
     };
 
     const task = new Task(data);
@@ -41,11 +43,6 @@ class TaskService {
     // Lead filter
     if (filters.lead) {
       filter.lead = filters.lead;
-    }
-
-    // Priority filter
-    if (filters.priority) {
-      filter.priority = filters.priority;
     }
 
     // Search by title
@@ -92,7 +89,7 @@ class TaskService {
     return task;
   }
 
-  // Update task status
+  // Update task status - Only assigned users can update
   async updateTaskStatus(taskId, status, userId) {
     // Check if user is assigned to this task
     const task = await Task.findOne({
@@ -130,7 +127,12 @@ class TaskService {
       await LeadService.getLead(updateData.lead, userId);
     }
 
-    Object.assign(task, updateData);
+    // Only allow updating specific fields
+    if (updateData.title) task.title = updateData.title;
+    if (updateData.lead) task.lead = updateData.lead;
+    if (updateData.assignedTo) task.assignedTo = updateData.assignedTo;
+    if (updateData.dueDate) task.dueDate = updateData.dueDate;
+
     await task.save();
     await task.populate(['lead', 'assignedTo', 'assignedBy']);
 
@@ -148,49 +150,6 @@ class TaskService {
     }).populate('assignedTo', 'name email');
 
     return tasks;
-  }
-
-  // Get overdue tasks
-  async getOverdueTasks(userId) {
-    const tasks = await Task.find({
-      $or: [{ assignedTo: userId }, { assignedBy: userId }],
-      status: { $nin: ['completed', 'cancelled'] },
-      dueDate: { $lt: new Date() }
-    });
-
-    return tasks;
-  }
-
-  // Get task statistics
-  async getTaskStats(userId) {
-    const totalTasks = await Task.countDocuments({
-      $or: [{ assignedTo: userId }, { assignedBy: userId }]
-    });
-
-    const tasksByStatus = await Task.aggregate([
-      {
-        $match: {
-          $or: [{ assignedTo: userId }, { assignedBy: userId }]
-        }
-      },
-      { $group: { _id: '$status', count: { $sum: 1 } } },
-      { $sort: { _id: 1 } }
-    ]);
-
-    const completedTasks = tasksByStatus.find(t => t._id === 'completed')?.count || 0;
-    const taskCompletionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-
-    const overdueTasks = await this.getOverdueTasks(userId);
-
-    return {
-      totalTasks,
-      taskCompletionRate,
-      overdueTasksCount: overdueTasks.length,
-      tasksByStatus: tasksByStatus.reduce((acc, item) => {
-        acc[item._id] = item.count;
-        return acc;
-      }, {})
-    };
   }
 }
 

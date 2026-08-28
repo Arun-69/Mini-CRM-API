@@ -23,26 +23,18 @@ const leadSchema = new mongoose.Schema({
   },
   company: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Company'
+    ref: 'Company',
+    default: null
   },
   status: {
     type: String,
     enum: ['new', 'contacted', 'qualified', 'lost', 'converted'],
     default: 'new'
   },
-  source: {
-    type: String,
-    enum: ['website', 'referral', 'social', 'email', 'other'],
-    default: 'other'
-  },
-  notes: {
-    type: String,
-    trim: true,
-    maxlength: [1000, 'Notes cannot exceed 1000 characters']
-  },
   assignedTo: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
+    ref: 'User',
+    default: null
   },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
@@ -54,7 +46,8 @@ const leadSchema = new mongoose.Schema({
     default: false
   },
   deletedAt: {
-    type: Date
+    type: Date,
+    default: null
   }
 }, {
   timestamps: true,
@@ -70,10 +63,15 @@ leadSchema.index({ assignedTo: 1 });
 leadSchema.index({ isDeleted: 1 });
 leadSchema.index({ createdAt: -1 });
 
-// Query middleware to exclude soft-deleted leads
+// Query middleware to exclude soft deleted leads
 leadSchema.pre(/^find/, function(next) {
   this.where({ isDeleted: false });
   next();
 });
+
+// Check if lead is deleted
+leadSchema.methods.isSoftDeleted = function() {
+  return this.isDeleted === true;
+};
 
 module.exports = leadSchema;

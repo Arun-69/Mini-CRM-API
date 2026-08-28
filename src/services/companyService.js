@@ -30,9 +30,13 @@ class CompanyService {
 
     const filter = { createdBy: userId };
 
-    // Search filter
+    // Search filter - by name, industry, city
     if (filters.search) {
-      filter.name = { $regex: filters.search, $options: 'i' };
+      filter.$or = [
+        { name: { $regex: filters.search, $options: 'i' } },
+        { industry: { $regex: filters.search, $options: 'i' } },
+        { 'address.city': { $regex: filters.search, $options: 'i' } }
+      ];
     }
 
     // Industry filter
@@ -109,24 +113,43 @@ class CompanyService {
     return company;
   }
 
-  // Get company by name
-  async getCompanyByName(name, userId) {
+  // Delete company
+  async deleteCompany(companyId, userId) {
     const company = await Company.findOne({
-      name,
+      _id: companyId,
       createdBy: userId
     });
-    return company;
+
+    if (!company) {
+      throw new Error('Company not found');
+    }
+
+    // Check if company has associated leads
+    const leads = await LeadService.getLeadsByCompany(companyId, userId);
+    if (leads && leads.length > 0) {
+      throw new Error('Cannot delete company with associated leads. Please reassign or delete the leads first.');
+    }
+
+    await Company.findByIdAndDelete(companyId);
+    return true;
   }
 
-  // Get or create company
-  async getOrCreateCompany(name, userId) {
-    let company = await this.getCompanyByName(name, userId);
-    
-    if (!company) {
-      company = await this.createCompany({ name }, userId);
-    }
-    
-    return company;
+  // Search companies
+  async searchCompanies(query, userId) {
+    const filter = {
+      createdBy: userId,
+      $or: [
+        { name: { $regex: query, $options: 'i' } },
+        { industry: { $regex: query, $options: 'i' } },
+        { 'address.city': { $regex: query, $options: 'i' } }
+      ]
+    };
+
+    const companies = await Company.find(filter)
+      .sort({ name: 1 })
+      .limit(20);
+
+    return companies;
   }
 }
 

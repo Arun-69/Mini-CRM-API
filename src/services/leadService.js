@@ -1,28 +1,28 @@
 const Lead = require('../models/Lead');
 const Company = require('../models/Company');
+const mongoose = require('mongoose');
 
 class LeadService {
   // Create lead
   async createLead(leadData, userId) {
     const data = { ...leadData, createdBy: userId };
 
-    // Handle company creation/finding
-    if (leadData.companyName) {
-      let company = await Company.findOne({
-        name: leadData.companyName,
+    if (data.company) {
+      const company = await Company.findOne({
+        _id: data.company,
         createdBy: userId
       });
-
       if (!company) {
-        company = new Company({
-          name: leadData.companyName,
-          createdBy: userId
-        });
-        await company.save();
+        throw new Error('Company not found');
       }
+    } else {
+      data.company = null;
+    }
 
-      data.company = company._id;
-      delete data.companyName;
+    if (data.assignedTo && mongoose.Types.ObjectId.isValid(data.assignedTo)) {
+
+    } else {
+      data.assignedTo = null;
     }
 
     const lead = new Lead(data);
@@ -40,7 +40,7 @@ class LeadService {
 
     const filter = { createdBy: userId };
 
-    // Search filter
+    // Search filter 
     if (filters.search) {
       filter.$or = [
         { name: { $regex: filters.search, $options: 'i' } },
@@ -54,18 +54,13 @@ class LeadService {
       filter.status = filters.status;
     }
 
-    // Source filter
-    if (filters.source) {
-      filter.source = filters.source;
-    }
-
     // Company filter
     if (filters.company) {
       filter.company = filters.company;
     }
 
     // Assigned filter
-    if (filters.assignedTo) {
+    if (filters.assignedTo && mongoose.Types.ObjectId.isValid(filters.assignedTo)) {
       filter.assignedTo = filters.assignedTo;
     }
 
@@ -93,6 +88,10 @@ class LeadService {
 
   // Get single lead
   async getLead(leadId, userId) {
+    if (!mongoose.Types.ObjectId.isValid(leadId)) {
+      throw new Error('Invalid lead ID format');
+    }
+
     const lead = await Lead.findOne({
       _id: leadId,
       createdBy: userId
@@ -107,6 +106,10 @@ class LeadService {
 
   // Update lead
   async updateLead(leadId, updateData, userId) {
+    if (!mongoose.Types.ObjectId.isValid(leadId)) {
+      throw new Error('Invalid lead ID format');
+    }
+
     const lead = await Lead.findOne({
       _id: leadId,
       createdBy: userId
@@ -117,25 +120,38 @@ class LeadService {
     }
 
     // Handle company update
-    if (updateData.companyName) {
-      let company = await Company.findOne({
-        name: updateData.companyName,
-        createdBy: userId
-      });
-
-      if (!company) {
-        company = new Company({
-          name: updateData.companyName,
+    if (updateData.company !== undefined) {
+      if (updateData.company) {
+        const company = await Company.findOne({
+          _id: updateData.company,
           createdBy: userId
         });
-        await company.save();
+        if (!company) {
+          throw new Error('Company not found');
+        }
+        lead.company = updateData.company;
+      } else {
+        lead.company = null;
       }
-
-      updateData.company = company._id;
-      delete updateData.companyName;
+      delete updateData.company;
     }
 
-    Object.assign(lead, updateData);
+
+    if (updateData.assignedTo !== undefined) {
+      if (updateData.assignedTo && mongoose.Types.ObjectId.isValid(updateData.assignedTo)) {
+        lead.assignedTo = updateData.assignedTo;
+      } else {
+        lead.assignedTo = null;
+      }
+      delete updateData.assignedTo;
+    }
+
+
+    if (updateData.name) lead.name = updateData.name;
+    if (updateData.email) lead.email = updateData.email;
+    if (updateData.phone) lead.phone = updateData.phone;
+    if (updateData.status) lead.status = updateData.status;
+
     await lead.save();
     await lead.populate(['company', 'assignedTo', 'createdBy']);
 
@@ -144,6 +160,10 @@ class LeadService {
 
   // Update lead status
   async updateLeadStatus(leadId, status, userId) {
+    if (!mongoose.Types.ObjectId.isValid(leadId)) {
+      throw new Error('Invalid lead ID format');
+    }
+
     const lead = await Lead.findOne({
       _id: leadId,
       createdBy: userId
@@ -160,29 +180,50 @@ class LeadService {
     return lead;
   }
 
-  // Soft delete lead
   async deleteLead(leadId, userId) {
-    const lead = await Lead.findOne({
-      _id: leadId,
-      createdBy: userId
-    });
+    try {
+      if (!mongoose.Types.ObjectId.isValid(leadId)) {
+        throw new Error('Invalid lead ID format');
+      }
 
-    if (!lead) {
-      throw new Error('Lead not found');
+      console.log('Deleting lead:', leadId, 'for user:', userId);
+
+      const lead = await Lead.findOne({
+        _id: leadId,
+        createdBy: userId
+      });
+
+      if (!lead) {
+        throw new Error('Lead not found');
+      }
+
+      if (lead.isDeleted) {
+        throw new Error('Lead is already deleted');
+      }
+
+      lead.isDeleted = true;
+      lead.deletedAt = new Date();
+      await lead.save();
+
+      console.log('Lead soft deleted successfully:', leadId);
+
+      return true;
+    } catch (error) {
+      console.error('Delete lead error:', error);
+      throw error;
     }
-
-    lead.isDeleted = true;
-    lead.deletedAt = new Date();
-    await lead.save();
-
-    return true;
   }
 
   // Get leads by company
   async getLeadsByCompany(companyId, userId) {
+    if (!mongoose.Types.ObjectId.isValid(companyId)) {
+      return [];
+    }
+
     const leads = await Lead.find({
       company: companyId,
-      createdBy: userId
+      createdBy: userId,
+      isDeleted: false
     }).populate('assignedTo', 'name email');
 
     return leads;
